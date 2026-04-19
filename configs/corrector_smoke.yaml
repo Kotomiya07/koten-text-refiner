@@ -1,0 +1,23 @@
+model:
+  name: Qwen/Qwen3.5-9B
+  max_seq_length: 1024
+  load_in_4bit: true
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+train:
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-4
+  epochs: 1
+  logging_steps: 1
+  seed: 42
