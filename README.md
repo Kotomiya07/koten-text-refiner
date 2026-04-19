@@ -43,6 +43,7 @@
 
 ```bash
 uv sync
+uv add flash-attn --no-build-isolation
 ```
 
 CLI ヘルプ:
