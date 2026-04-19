@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
+import warnings
 
 import orjson
 import yaml
@@ -8,6 +10,30 @@ import yaml
 
 def load_yaml_config(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
+
+
+def _make_model_card_generation_best_effort(trainer: object) -> None:
+    original_create_model_card = getattr(trainer, "create_model_card", None)
+    if original_create_model_card is None:
+        return
+
+    warned = False
+
+    def safe_create_model_card(*args, **kwargs):
+        nonlocal warned
+        try:
+            return original_create_model_card(*args, **kwargs)
+        except PackageNotFoundError as exc:
+            if not warned:
+                warned = True
+                missing = getattr(exc, "name", None) or "required package metadata"
+                warnings.warn(
+                    f"Skipping model card generation because metadata for {missing!r} is unavailable.",
+                    stacklevel=2,
+                )
+            return None
+
+    trainer.create_model_card = safe_create_model_card
 
 
 def train_with_unsloth(dataset_path: Path, output_dir: Path, config: dict) -> None:
@@ -61,6 +87,7 @@ def train_with_unsloth(dataset_path: Path, output_dir: Path, config: dict) -> No
             report_to=[],
         ),
     )
+    _make_model_card_generation_best_effort(trainer)
     trainer.train()
     trainer.save_model(str(output_dir))
     tokenizer.save_pretrained(str(output_dir))

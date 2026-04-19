@@ -737,7 +737,7 @@ dependencies = [
 requires-dist = [
     { name = "datasets", specifier = ">=4.0.0" },
     { name = "evaluate", specifier = ">=0.4.0" },
-    { name = "flash-attn", specifier = ">=2.8.3" },
+    { name = "flash-attn", specifier = "==2.8.3" },
     { name = "jiwer", specifier = ">=4.0.0" },
     { name = "mecab-python3", specifier = ">=1.0.10" },
     { name = "orjson", specifier = ">=3.10.0" },
