@@ -21,3 +21,14 @@ train:
   epochs: 1
   logging_steps: 1
   seed: 42
+wandb:
+  enabled: true
+  project: koten-text-refiner
+  entity:
+  group: corrector-smoke
+  job_type: train
+  mode: offline
+  run_name:
+  tags:
+    - corrector
+    - smoke

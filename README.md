@@ -15,6 +15,7 @@
 - detector 評価は generation 指標モジュールから分離し、専用の軽量経路で処理するよう整理済み
 - `PLAN` の基礎テスト項目に対応する単体テストを追加済み
 - 軽量コマンドでのメモリ消費を抑えるため、training / tokenizer 依存は遅延 import に整理済み
+- detector 学習では教師文末に `EOS` を付け、推論では task ごとの既定 `max_new_tokens` と反復抑制を使うよう調整済み
 - detector の smoke 学習・smoke 推論・文字単位評価・サブトークン評価は `results/smoke_detector_retry/` に成果物あり
 - corrector の smoke 用 train JSONL は `results/smoke_corrector/` と `results/smoke_corrector_retry/` にあるが、学習・推論・評価の完走成果物はまだ揃っていない
 - `one_stage` と `edit_only` の smoke 完走成果物はまだ記録していない
@@ -45,6 +46,8 @@
 uv sync
 uv add flash-attn --no-build-isolation
 ```
+
+`wandb` ロギングは既定で有効です。既定モードは `offline` で、ログは各学習出力ディレクトリ配下の `wandb/` に保存します。W&B サーバへ送る場合は `wandb.mode: online` に変更してください。`run_name` を空にしておくと、`YYYYMMDD_hhmmss_detector` のような形式で自動採番します。
 
 CLI ヘルプ:
 
@@ -90,6 +93,22 @@ uv run koten-refiner train-detector \
   --config-path configs/detector.yaml \
   --fold 0 \
   --output-dir results/detector
+```
+
+`wandb` を online で送る場合の設定例:
+
+```yaml
+wandb:
+  enabled: true
+  project: koten-text-refiner
+  entity: your-team
+  group: detector
+  job_type: train
+  mode: online
+  run_name: detector-fold-0
+  tags:
+    - detector
+    - fold0
 ```
 
 corrector / one-stage 学習:
@@ -147,8 +166,13 @@ uv run koten-refiner predict-fold \
   --processed-dir data/processed \
   --fold 0 \
   --split test \
+  --batch-size 32 \
   --output-path results/detector/fold_0_predictions.jsonl
 ```
+
+`predict-fold` は `tqdm` で進捗を表示します。test 件数が多い場合でも、現在位置と残り件数を端末上で確認できます。
+`max_new_tokens` の既定値は task ごとに切り替わり、`detector` は `256`、それ以外は `512` です。`detector` では greedy decode に加えて反復抑制も有効にしています。
+`--batch-size` を指定すると複数サンプルをまとめて生成します。GPU メモリに応じて `2`, `4`, `8` などを調整してください。既定値は `1` です。
 
 detector 出力から corrector test 入力を生成:
 

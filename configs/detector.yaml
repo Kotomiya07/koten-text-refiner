@@ -21,4 +21,13 @@ train:
   epochs: 3
   logging_steps: 10
   seed: 42
-
+wandb:
+  enabled: true
+  project: koten-text-refiner
+  entity:
+  group: detector
+  job_type: train
+  mode: online
+  run_name:
+  tags:
+    - detector

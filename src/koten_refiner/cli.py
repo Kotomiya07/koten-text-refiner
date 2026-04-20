@@ -4,6 +4,7 @@ from pathlib import Path
 
 import orjson
 import typer
+from tqdm.auto import tqdm
 
 from koten_refiner.dataset_builder import build_experiment_records, build_fold_map, discover_page_records, write_jsonl
 from koten_refiner.models import PageRecord, record_id_for
@@ -58,6 +59,16 @@ def _limit_rows(rows: list[dict], max_samples: int | None) -> list[dict]:
 
 def _rows_by_record_id(rows: list[dict]) -> dict[str, dict]:
     return {row["record_id"]: row for row in rows}
+
+
+def _progress_bar(total: int, task: str, fold: int, split: str):
+    description = f"{task} fold={fold} split={split}"
+    return tqdm(total=total, desc=description, unit="sample")
+
+
+def _batch_rows(rows: list[dict], batch_size: int):
+    for start in range(0, len(rows), batch_size):
+        yield rows[start : start + batch_size]
 
 
 @app.command("train-detector")
@@ -147,18 +158,21 @@ def predict_fold(
     split: str = typer.Option("test"),
     input_override: Path | None = typer.Option(None, exists=True, dir_okay=False),
     output_path: Path = typer.Option(Path("results/predictions.jsonl"), dir_okay=False),
-    max_new_tokens: int = typer.Option(512),
+    max_new_tokens: int | None = typer.Option(None),
+    batch_size: int = typer.Option(1),
     max_samples: int | None = typer.Option(None),
 ) -> None:
     from koten_refiner.evaluation import load_jsonl
     from koten_refiner.inference import (
         apply_edit_only_prediction,
-        generate_text,
+        generate_texts,
         load_generation_model,
         normalize_detector_prediction,
         write_predictions,
     )
 
+    if batch_size <= 0:
+        raise typer.BadParameter("batch-size must be >= 1")
     if input_override is not None:
         rows = load_jsonl(input_override)
     else:
@@ -166,21 +180,34 @@ def predict_fold(
     rows = _limit_rows(rows, max_samples)
     model, tokenizer = load_generation_model(model_dir)
     predictions: list[dict] = []
-    for row in rows:
-        prediction_text = generate_text(model, tokenizer, row["prompt"], row["input_text"], max_new_tokens=max_new_tokens)
-        restored_text = prediction_text
-        if task == "edit_only":
-            restored_text = apply_edit_only_prediction(row["input_text"], prediction_text)
-        elif task == "detector":
-            restored_text = normalize_detector_prediction(prediction_text, row["raw_ocr_text"])
-        predictions.append(
-            {
-                **row,
-                "prediction_text": prediction_text,
-                "restored_text": restored_text,
-                "model_dir": str(model_dir),
-            }
-        )
+    progress = _progress_bar(len(rows), task=task, fold=fold, split=split)
+    try:
+        for batch in _batch_rows(rows, batch_size):
+            prediction_texts = generate_texts(
+                model,
+                tokenizer,
+                [row["prompt"] for row in batch],
+                [row["input_text"] for row in batch],
+                task=task,
+                max_new_tokens=max_new_tokens,
+            )
+            for row, prediction_text in zip(batch, prediction_texts, strict=True):
+                restored_text = prediction_text
+                if task == "edit_only":
+                    restored_text = apply_edit_only_prediction(row["input_text"], prediction_text)
+                elif task == "detector":
+                    restored_text = normalize_detector_prediction(prediction_text, row["raw_ocr_text"])
+                predictions.append(
+                    {
+                        **row,
+                        "prediction_text": prediction_text,
+                        "restored_text": restored_text,
+                        "model_dir": str(model_dir),
+                    }
+                )
+            progress.update(len(batch))
+    finally:
+        progress.close()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     write_predictions(output_path, predictions)
     typer.echo(f"Wrote {len(predictions)} predictions to {output_path}")
