@@ -1,0 +1,35 @@
+model:
+  name: openai/gpt-oss-20b
+  max_seq_length: 2048
+  load_in_4bit: true
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+train:
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 2.0e-4
+  epochs: 3
+  logging_steps: 10
+  seed: 42
+wandb:
+  enabled: true
+  project: koten-text-refiner
+  entity:
+  group: corrector-gpt-oss-20b-qlora
+  job_type: train
+  mode: online
+  run_name:
+  tags:
+    - corrector
+    - gpt-oss-20b
+    - qlora

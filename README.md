@@ -91,9 +91,9 @@ detector 学習:
 ```bash
 uv run koten-refiner train-detector \
   --processed-dir data/processed \
-  --config-path configs/detector.yaml \
   --fold 0 \
-  --output-dir results/detector
+  --output-dir results/detector \
+  --config-path configs/detector.yaml
 ```
 
 `wandb` を online で送る場合の設定例:
