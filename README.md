@@ -33,6 +33,7 @@
 - `configs/`
   - `detector.yaml`, `corrector.yaml`, `edit_only.yaml`: 本番寄り設定
   - `detector_smoke.yaml`, `corrector_smoke.yaml`: smoke 用の軽量設定
+  - `gemma4_31b_it_qlora.yaml`: `gemma-4-31B-it` 向け QLoRA 設定
 - `data/processed/`
   - 前処理済み JSONL
 - `results/`
@@ -121,6 +122,19 @@ uv run koten-refiner train-corrector \
   --fold 0 \
   --output-dir results/corrector
 ```
+
+`gemma-4-31B-it` を QLoRA で回す場合の設定例:
+
+```bash
+uv run koten-refiner train-corrector \
+  --processed-dir data/processed \
+  --config-path configs/gemma4_31b_it_qlora.yaml \
+  --task corrector \
+  --fold 0 \
+  --output-dir results/corrector_gemma4_31b
+```
+
+この設定は `load_in_4bit: true` の QLoRA 前提です。実際の配布モデル名が `gemma-4-31B-it` と異なる場合は、`configs/gemma4_31b_it_qlora.yaml` の `model.name` だけ差し替えてください。
 
 `Edit-Only` 学習:
 

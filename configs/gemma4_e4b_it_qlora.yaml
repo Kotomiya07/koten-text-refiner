@@ -1,0 +1,36 @@
+model:
+  name: google/gemma-4-E4B-it
+  max_seq_length: 2048
+  load_in_4bit: false
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+train:
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 2.0e-4
+  epochs: 3
+  logging_steps: 10
+  seed: 42
+wandb:
+  enabled: true
+  project: koten-text-refiner
+  entity:
+  group: corrector-gemma4-E4B-qlora
+  job_type: train
+  mode: offline
+  run_name:
+  tags:
+    - corrector
+    - gemma4
+    - E4B
+    - qlora

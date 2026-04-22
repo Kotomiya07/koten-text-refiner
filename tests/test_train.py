@@ -2,6 +2,7 @@ import os
 import re
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError
+from pathlib import Path
 import warnings
 
 import pytest
@@ -14,6 +15,7 @@ from koten_refiner.train import (
     build_report_to,
     build_wandb_env,
     format_sft_training_text,
+    load_yaml_config,
     resolve_run_name,
     wandb_enabled,
 )
@@ -132,3 +134,19 @@ def test_apply_wandb_environment_sets_expected_variables(tmp_path, monkeypatch):
     assert os.environ["WANDB_DIR"] == str(tmp_path / "wandb")
     assert os.environ["WANDB_PROJECT"] == "koten-text-refiner"
     assert os.environ["WANDB_MODE"] == "offline"
+
+
+def test_gemma4_31b_qlora_config_loads_with_expected_defaults():
+    config = load_yaml_config(Path("configs/gemma4_31b_it_qlora.yaml"))
+
+    assert config["model"] == {
+        "name": "gemma-4-31B-it",
+        "max_seq_length": 2048,
+        "load_in_4bit": True,
+    }
+    assert config["lora"]["r"] == 16
+    assert config["lora"]["alpha"] == 32
+    assert config["lora"]["dropout"] == 0.05
+    assert config["train"]["per_device_batch_size"] == 1
+    assert config["train"]["gradient_accumulation_steps"] == 16
+    assert config["wandb"]["group"] == "corrector-gemma4-31b-qlora"
