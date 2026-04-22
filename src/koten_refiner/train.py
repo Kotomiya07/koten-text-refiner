@@ -130,6 +130,30 @@ def _make_model_card_generation_best_effort(trainer: object) -> None:
     trainer.create_model_card = safe_create_model_card
 
 
+def resolve_attention_implementation(config: dict) -> str | None:
+    model_config = config.get("model", {})
+    configured = model_config.get("attn_implementation")
+    if isinstance(configured, str) and configured:
+        return configured
+
+    model_name = str(model_config.get("name", "")).lower()
+    if "gpt-oss" not in model_name:
+        return None
+
+    try:
+        import torch
+    except ImportError:
+        return None
+
+    if not torch.cuda.is_available():
+        return None
+
+    major, _minor = torch.cuda.get_device_capability(0)
+    if major < 9:
+        return "eager"
+    return None
+
+
 def train_with_unsloth(dataset_path: Path, output_dir: Path, config: dict) -> None:
     from datasets import load_dataset
     from unsloth import FastLanguageModel
@@ -141,12 +165,14 @@ def train_with_unsloth(dataset_path: Path, output_dir: Path, config: dict) -> No
     model_name = config["model"]["name"]
     max_seq_length = config["model"]["max_seq_length"]
     load_in_4bit = config["model"].get("load_in_4bit", False)
+    attn_implementation = resolve_attention_implementation(config)
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
         max_seq_length=max_seq_length,
         dtype=None,
         load_in_4bit=load_in_4bit,
+        attn_implementation=attn_implementation,
     )
     model = FastLanguageModel.get_peft_model(
         model,
