@@ -15,6 +15,10 @@ lora:
     - up_proj
     - down_proj
 train:
+  completion_only_loss: true
+  use_chat_template: true
+  add_error_tag_tokens: true
+  train_error_tag_embeddings: true
   per_device_batch_size: 1
   gradient_accumulation_steps: 16
   learning_rate: 2.0e-4

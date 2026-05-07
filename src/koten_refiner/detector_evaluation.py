@@ -122,8 +122,14 @@ def _evaluate_detector_row(
     tokenizer: OffsetTokenizer | None = None,
     char_chunk_size: int = DEFAULT_DETECTOR_CHAR_CHUNK_SIZE,
 ) -> tuple[int, int, int, int]:
-    true_text, true_char_labels = char_labels_from_tagged(row["target_text"])
-    pred_text, pred_char_labels = char_labels_from_tagged(row["prediction_text"])
+    true_tagged = row.get("target_text", "")
+    pred_tagged = row.get("prediction_text", "")
+    if row.get("task") == "detector_span":
+        true_tagged = row.get("tagged_ocr_text", true_tagged)
+        pred_tagged = row.get("restored_text", pred_tagged)
+
+    true_text, true_char_labels = char_labels_from_tagged(true_tagged)
+    pred_text, pred_char_labels = char_labels_from_tagged(pred_tagged)
     if tokenizer is None:
         true_labels = true_char_labels
         pred_labels = pred_char_labels if pred_text == true_text else [0] * len(true_labels)

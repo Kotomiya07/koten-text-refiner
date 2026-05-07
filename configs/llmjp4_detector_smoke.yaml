@@ -1,11 +1,11 @@
 model:
-  name: Qwen/Qwen3.5-4B
-  max_seq_length: 1024
+  name: llm-jp/llm-jp-4-8b-instruct
+  max_seq_length: 2048
   load_in_4bit: true
 lora:
   r: 8
   alpha: 16
-  dropout: 0.05
+  dropout: 0.0
   target_modules:
     - q_proj
     - k_proj
@@ -17,22 +17,24 @@ lora:
 train:
   completion_only_loss: true
   use_chat_template: true
-  add_error_tag_tokens: true
-  train_error_tag_embeddings: true
+  chat_content_parts: false
+  add_error_tag_tokens: false
+  train_error_tag_embeddings: false
   per_device_batch_size: 1
   gradient_accumulation_steps: 1
-  learning_rate: 1.0e-4
-  epochs: 1
+  learning_rate: 2.0e-4
+  epochs: 3
   logging_steps: 1
   seed: 42
 wandb:
   enabled: true
   project: koten-text-refiner
   entity:
-  group: corrector-smoke
+  group: llmjp4-detector-smoke
   job_type: train
   mode: offline
   run_name:
   tags:
-    - corrector
+    - detector
+    - llmjp4
     - smoke

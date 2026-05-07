@@ -115,6 +115,25 @@ def test_compute_detector_metrics_char_fallback_is_available():
     }
 
 
+def test_compute_detector_metrics_uses_restored_text_for_detector_span_rows():
+    rows = [
+        {
+            "task": "detector_span",
+            "target_text": '[{"start":1,"end":3}]',
+            "tagged_ocr_text": "A<error>BC</error>D",
+            "prediction_text": '[{"start":1,"end":3}]',
+            "restored_text": "A<error>BC</error>D",
+        }
+    ]
+    metrics = compute_detector_metrics(rows, tokenizer=None)
+    assert metrics == {
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+    }
+
+
 def test_compute_detector_metrics_from_path_supports_subtokens(tmp_path: Path):
     path = tmp_path / "predictions.jsonl"
     path.write_text(

@@ -1,5 +1,5 @@
 model:
-  name: Qwen/Qwen3.5-9B
+  name: Qwen/Qwen3.5-4B
   max_seq_length: 4096
   load_in_4bit: false
 lora:
@@ -15,6 +15,10 @@ lora:
     - up_proj
     - down_proj
 train:
+  completion_only_loss: true
+  use_chat_template: true
+  add_error_tag_tokens: true
+  train_error_tag_embeddings: true
   per_device_batch_size: 1
   gradient_accumulation_steps: 16
   learning_rate: 1.0e-4

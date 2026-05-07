@@ -25,9 +25,17 @@ def prepare_data(
     dataset_dir: Path = typer.Option(_default_dataset_dir(), exists=True, file_okay=False),
     output_dir: Path = typer.Option(_default_processed_dir(), file_okay=False),
     seed: int = typer.Option(42),
+    text_profile: str = typer.Option("raw", help="Text normalization profile: raw, symbols, or paper"),
+    min_reference_chars: int = typer.Option(1, help="Drop pages whose normalized reference is shorter than this"),
+    max_length_ratio: float | None = typer.Option(None, help="Drop pages with extreme OCR/reference length ratio"),
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    records = discover_page_records(dataset_dir)
+    records = discover_page_records(
+        dataset_dir,
+        text_profile=text_profile,
+        min_reference_chars=min_reference_chars,
+        max_length_ratio=max_length_ratio,
+    )
     fold_map = build_fold_map(records, seed=seed)
     experiment_records = build_experiment_records(records, fold_map)
 
@@ -35,7 +43,7 @@ def prepare_data(
     write_jsonl(output_dir / "folds.jsonl", ({"record_id": rid, **info} for rid, info in fold_map.items()))
     write_jsonl(output_dir / "experiments.jsonl", (record.model_dump() for record in experiment_records))
 
-    for task in ("detector", "corrector", "one_stage", "edit_only"):
+    for task in ("detector", "detector_span", "corrector", "one_stage", "edit_only"):
         task_rows = [row.model_dump() for row in experiment_records if row.task == task]
         write_jsonl(output_dir / f"{task}.jsonl", task_rows)
     typer.echo(f"Prepared {len(records)} pages and {len(experiment_records)} task rows in {output_dir}")
@@ -84,6 +92,24 @@ def train_detector(
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = _limit_rows(_filter_task_rows(processed_dir, "detector", fold, "train"), max_samples)
     train_path = output_dir / f"detector_fold{fold}_train.jsonl"
+    write_jsonl(train_path, rows)
+    config = load_yaml_config(config_path)
+    train_with_unsloth(train_path, output_dir / f"fold_{fold}", config)
+
+
+@app.command("train-detector-span")
+def train_detector_span(
+    processed_dir: Path = typer.Option(_default_processed_dir(), exists=True, file_okay=False),
+    config_path: Path = typer.Option(Path("configs/llmjp4_detector_span.yaml"), exists=True, dir_okay=False),
+    fold: int = typer.Option(0),
+    output_dir: Path = typer.Option(Path("results/llmjp4_detector_span"), file_okay=False),
+    max_samples: int | None = typer.Option(None),
+) -> None:
+    from koten_refiner.train import load_yaml_config, train_with_unsloth
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows = _limit_rows(_filter_task_rows(processed_dir, "detector_span", fold, "train"), max_samples)
+    train_path = output_dir / f"detector_span_fold{fold}_train.jsonl"
     write_jsonl(train_path, rows)
     config = load_yaml_config(config_path)
     train_with_unsloth(train_path, output_dir / f"fold_{fold}", config)
@@ -168,6 +194,7 @@ def predict_fold(
         generate_texts,
         load_generation_model,
         normalize_detector_prediction,
+        restore_detector_span_prediction,
         write_predictions,
     )
 
@@ -197,6 +224,8 @@ def predict_fold(
                     restored_text = apply_edit_only_prediction(row["input_text"], prediction_text)
                 elif task == "detector":
                     restored_text = normalize_detector_prediction(prediction_text, row["raw_ocr_text"])
+                elif task == "detector_span":
+                    restored_text = restore_detector_span_prediction(prediction_text, row["raw_ocr_text"])
                 predictions.append(
                     {
                         **row,
@@ -222,7 +251,7 @@ def evaluate_predictions(
     detector_tokenizer_model: str = typer.Option("rinna/japanese-roberta-base"),
     detector_char_chunk_size: int = typer.Option(256),
 ) -> None:
-    if task == "detector":
+    if task in {"detector", "detector_span"}:
         from koten_refiner.detector_evaluation import (
             compute_detector_metrics_from_path,
             load_detector_tokenizer,
@@ -247,6 +276,20 @@ def evaluate_predictions(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(output_path, metrics)
     typer.echo(orjson.dumps(metrics, option=orjson.OPT_INDENT_2).decode())
+
+
+@app.command("analyze-detector-predictions")
+def analyze_detector_predictions(
+    predictions_path: Path = typer.Option(..., exists=True, dir_okay=False),
+    output_path: Path = typer.Option(Path("results/detector_diagnostics.json"), dir_okay=False),
+) -> None:
+    from koten_refiner.evaluation import load_jsonl, write_json
+    from koten_refiner.inference import detector_prediction_diagnostics
+
+    diagnostics = detector_prediction_diagnostics(load_jsonl(predictions_path))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(output_path, diagnostics)
+    typer.echo(orjson.dumps(diagnostics, option=orjson.OPT_INDENT_2).decode())
 
 
 @app.command("summarize-metrics")

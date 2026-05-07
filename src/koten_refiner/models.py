@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 HumanSource = Literal["humanA", "humanB"]
-TaskName = Literal["detector", "corrector", "one_stage", "edit_only"]
+TaskName = Literal["detector", "detector_span", "corrector", "one_stage", "edit_only"]
 
 
 class PageRecord(BaseModel):
@@ -53,4 +53,3 @@ def relative_to_cwd(path: Path, cwd: Path) -> str:
         return str(path.relative_to(cwd))
     except ValueError:
         return str(path)
-

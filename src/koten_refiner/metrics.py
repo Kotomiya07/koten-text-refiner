@@ -23,12 +23,12 @@ def tokenize_ja(text: str) -> str:
 def compute_text_metrics(prediction: str, reference: str) -> dict[str, float]:
     global _BLEU
     if _BLEU is None:
-        import evaluate
+        from sacrebleu.metrics import BLEU
 
-        _BLEU = evaluate.load("sacrebleu")
+        _BLEU = BLEU(effective_order=True)
     pred = normalize_text(prediction)
     ref = normalize_text(reference)
-    bleu = _BLEU.compute(predictions=[pred], references=[[ref]])["score"]
+    bleu = _BLEU.sentence_score(pred, [ref]).score
     crr = 1.0 - cer(ref, pred)
     wrr = 1.0 - wer(tokenize_ja(ref), tokenize_ja(pred))
     return {

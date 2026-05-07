@@ -11,7 +11,19 @@ from sklearn.model_selection import KFold
 from koten_refiner.alignment import edit_only_tagged_text, error_spans_from_alignment, tag_error_spans
 from koten_refiner.metrics import normalize_text
 from koten_refiner.models import ExperimentRecord, PageRecord, record_id_for
-from koten_refiner.prompts import CORRECTOR_PROMPT, DETECTOR_PROMPT, EDIT_ONLY_PROMPT, ONE_STAGE_PROMPT
+from koten_refiner.prompts import (
+    CORRECTOR_PROMPT,
+    DETECTOR_PROMPT,
+    DETECTOR_SPAN_PROMPT,
+    EDIT_ONLY_PROMPT,
+    ONE_STAGE_PROMPT,
+)
+
+
+TextProfile = str
+EDITORIAL_MARKERS = frozenset({"★", "☆"})
+SYMBOL_TRANSLATION = str.maketrans("", "", "★☆□〓")
+UNKNOWN_PLACEHOLDERS = str.maketrans("", "", "□〓")
 
 
 def _json_load(path: Path) -> dict[str, Any]:
@@ -48,7 +60,31 @@ def reconstruct_human_json_text_geometric(human_obj: dict[str, Any]) -> str:
     return normalize_text("\n".join(rect.get("str", "") for rect in rects))
 
 
-def discover_page_records(dataset_dir: Path) -> list[PageRecord]:
+def normalize_text_for_profile(text: str, profile: TextProfile = "raw") -> str:
+    text = normalize_text(text)
+    if profile == "raw":
+        return text
+    if profile == "symbols":
+        return normalize_text(text.translate(SYMBOL_TRANSLATION))
+    if profile != "paper":
+        raise ValueError(f"Unknown text profile: {profile}")
+
+    lines = []
+    for line in text.splitlines():
+        if any(marker in line for marker in EDITORIAL_MARKERS):
+            continue
+        cleaned = line.translate(UNKNOWN_PLACEHOLDERS)
+        if cleaned.strip():
+            lines.append(cleaned)
+    return normalize_text("\n".join(lines))
+
+
+def discover_page_records(
+    dataset_dir: Path,
+    text_profile: TextProfile = "raw",
+    min_reference_chars: int = 1,
+    max_length_ratio: float | None = None,
+) -> list[PageRecord]:
     ndl_root = dataset_dir / "ndl"
     human_a_root = dataset_dir / "humanA"
     human_b_root = dataset_dir / "humanB"
@@ -72,10 +108,17 @@ def discover_page_records(dataset_dir: Path) -> list[PageRecord]:
             if not human_text_path.exists() or not human_json_path.exists():
                 continue
             ocr_obj = _json_load(ocr_path)
-            ocr_text = reconstruct_ndl_ocr_text(ocr_obj)
-            reference_text = normalize_text(human_text_path.read_text())
+            ocr_text = normalize_text_for_profile(reconstruct_ndl_ocr_text(ocr_obj), text_profile)
+            reference_text = normalize_text_for_profile(human_text_path.read_text(), text_profile)
             if not ocr_text or not reference_text:
                 continue
+            if len(reference_text) < min_reference_chars:
+                continue
+            if max_length_ratio is not None:
+                shorter = max(1, min(len(ocr_text), len(reference_text)))
+                longer = max(len(ocr_text), len(reference_text))
+                if longer / shorter > max_length_ratio:
+                    continue
             records.append(
                 PageRecord(
                     work_id=work_id,
@@ -141,6 +184,19 @@ def build_experiment_records(records: list[PageRecord], fold_map: dict[str, dict
             output.append(
                 ExperimentRecord(
                     **common,
+                    task="detector_span",
+                    prompt=DETECTOR_SPAN_PROMPT,
+                    input_text=record.ocr_text,
+                    target_text=_detector_span_target(spans),
+                    metadata={
+                        "num_error_spans": len(spans),
+                        "error_spans": [{"start": span.start, "end": span.end} for span in spans],
+                    },
+                )
+            )
+            output.append(
+                ExperimentRecord(
+                    **common,
                     task="corrector",
                     prompt=CORRECTOR_PROMPT,
                     input_text=f"{tagged}<sep>{record.ocr_text}",
@@ -169,6 +225,12 @@ def build_experiment_records(records: list[PageRecord], fold_map: dict[str, dict
                 )
             )
     return output
+
+
+def _detector_span_target(spans: list) -> str:
+    return orjson.dumps(
+        [[span.start, span.end] for span in spans],
+    ).decode()
 
 
 def _edit_only_target(ocr_text: str, reference_text: str, spans: list) -> str:

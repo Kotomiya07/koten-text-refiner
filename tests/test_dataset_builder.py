@@ -5,11 +5,13 @@ from pathlib import Path
 from koten_refiner.dataset_builder import (
     build_experiment_records,
     build_fold_map,
+    discover_page_records,
     human_page_key_from_path,
     ndl_page_key_from_path,
     reconstruct_human_json_text,
     reconstruct_human_json_text_geometric,
     reconstruct_ndl_ocr_text,
+    normalize_text_for_profile,
 )
 from koten_refiner.models import PageRecord, record_id_for
 
@@ -58,6 +60,18 @@ def test_saved_order_is_not_worse_than_geometric_sort_for_human_json():
     assert geometric != reference
 
 
+def test_paper_text_profile_removes_editorial_lines_and_unknown_placeholders():
+    text = "本文□あり\n★注記★\n☆印☆\n次〓行"
+
+    assert normalize_text_for_profile(text, "paper") == "本文あり\n次行"
+
+
+def test_symbols_text_profile_removes_symbols_without_dropping_lines():
+    text = "本文□あり\n★注記★\n☆印☆\n次〓行"
+
+    assert normalize_text_for_profile(text, "symbols") == "本文あり\n注記\n印\n次行"
+
+
 def test_build_experiment_records_generates_paper_format_corrector_input():
     record = make_page_record()
     rid = record_id_for(record.work_id, record.page_number)
@@ -68,8 +82,35 @@ def test_build_experiment_records_generates_paper_format_corrector_input():
     assert corrector_row.metadata["tag_source"] == "oracle"
 
 
+def test_build_experiment_records_generates_detector_span_json_target():
+    record = make_page_record()
+    rid = record_id_for(record.work_id, record.page_number)
+    fold_map = {f"{rid}|fold=0": {"record_id": rid, "fold": 0, "split": "train"}}
+    rows = build_experiment_records([record], fold_map)
+    span_row = next(row for row in rows if row.task == "detector_span")
+
+    assert span_row.input_text == record.ocr_text
+    assert span_row.target_text == '[[4,5]]'
+    assert span_row.metadata["error_spans"] == [{"start": 4, "end": 5}]
+
+
 def test_build_fold_map_is_reproducible_with_same_seed():
     records = [make_page_record(page_number=idx, ocr_text=f"ocr{idx}", reference_text=f"ref{idx}") for idx in range(1, 11)]
     fold_map_a = build_fold_map(records, seed=42)
     fold_map_b = build_fold_map(records, seed=42)
     assert fold_map_a == fold_map_b
+
+
+def test_discover_page_records_filters_short_reference_and_length_ratio(tmp_path: Path):
+    work_dir = tmp_path / "ndl" / "work1" / "json"
+    human_text_dir = tmp_path / "humanA" / "work1" / "text"
+    human_json_dir = tmp_path / "humanA" / "work1" / "json"
+    work_dir.mkdir(parents=True)
+    human_text_dir.mkdir(parents=True)
+    human_json_dir.mkdir(parents=True)
+    (work_dir / "work1-00001.json").write_text('{"contents":[[0,0,1,1,"長いOCR文字列"]]}', encoding="utf-8")
+    (human_text_dir / "work1_0001_qc.txt").write_text("短", encoding="utf-8")
+    (human_json_dir / "work1_0001_qc.json").write_text('{"rects":[]}', encoding="utf-8")
+
+    assert discover_page_records(tmp_path, min_reference_chars=2) == []
+    assert discover_page_records(tmp_path, min_reference_chars=1, max_length_ratio=2.0) == []

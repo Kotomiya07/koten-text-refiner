@@ -10,6 +10,7 @@
 - `NDL + humanA/humanB` からページ単位データを生成する前処理を実装済み
 - 5-fold CV の fold 定義と task 別 JSONL 出力を実装済み
 - `detector`, `corrector`, `one_stage`, `edit_only` の学習用 CLI を実装済み
+- 学習は既定で completion-only loss を使い、Qwen 系設定は chat template に揃えています
 - fold 推論、detector 出力から corrector test 入力を作る処理、指標計算、fold 集計を実装済み
 - detector 評価はメモリ安全な文字単位を既定とし、`rinna/japanese-roberta-base` の `spiece.model` を直接使うサブトークン評価も明示指定で利用可能
 - detector 評価は generation 指標モジュールから分離し、専用の軽量経路で処理するよう整理済み
@@ -137,6 +138,8 @@ uv run koten-refiner train-corrector \
 この設定は `load_in_4bit: true` の QLoRA 前提です。実際の配布モデル名が `gemma-4-31B-it` と異なる場合は、`configs/gemma4_31b_it_qlora.yaml` の `model.name` だけ差し替えてください。
 
 `Edit-Only` 学習:
+
+`Edit-Only` は改善比較用です。論文準拠の主実験は `detector` と `corrector` の 2 段階全文出力で実行し、その後に過剰再生成を抑える改善法として比較してください。
 
 ```bash
 uv run koten-refiner run-improvement \

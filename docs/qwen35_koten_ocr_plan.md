@@ -96,6 +96,8 @@
 - CLI は `prepare-data`, `train-detector`, `train-corrector`, `eval-cv`, `run-improvement` の 5 本を用意する。
 - 学習は bf16 LoRA に固定し、4-bit QLoRA は初回再現では使わない。
 - 初回既定値は `max_seq_length=4096`, `per_device_batch_size=1`, `gradient_accumulation_steps=16`, `lr=1e-4`, `lora_r=16`, `lora_alpha=32`, `lora_dropout=0.05`, `epochs=3`, `seed=42` とする。
+- SFT は既定で completion-only loss とし、`prompt/input` 部分には loss を載せず、`target` 部分だけを学習対象にする。
+- Qwen3.5 では学習時と推論時の両方で tokenizer の chat template を使い、OpenAI fine-tuning に近い user/assistant 形式に揃える。
 - これは論文の非公開学習設定を Qwen3.5-9B + RTX 4090 24GB 上で実行可能にするための置換設定であり、論文との差分として明示して記録する。
 
 ## Improvement Experiment
